@@ -355,7 +355,7 @@ button{font-family:inherit;border:none;background:none;cursor:pointer;color:inhe
 .viewer .vtop{display:flex;justify-content:space-between;align-items:center;padding:56px 18px 0;}
 .viewer .brand{font-size:11px;font-weight:800;color:#9fd8dc;}
 .viewer .x{width:28px;height:28px;border-radius:50%;background:rgba(255,255,255,.16);color:#fff;font-size:13px;display:flex;align-items:center;justify-content:center;cursor:pointer;}
-.viewer .stage{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:16px 22px;}
+.viewer .stage{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:16px 22px;position:relative;}
 .vbub{background:#fff;border-radius:15px;padding:12px 17px;font-size:14px;font-weight:800;color:#01579b;text-align:center;line-height:1.5;}
 .vchar{width:104px;height:104px;border-radius:50%;background:linear-gradient(135deg,#b39ddb,#7e57c2);display:flex;align-items:center;justify-content:center;font-size:44px;}
 .vsub{background:rgba(0,0,0,.45);color:#fff;font-size:11.5px;border-radius:8px;padding:6px 12px;text-align:center;line-height:1.6;}
@@ -425,7 +425,8 @@ const TODAY = '2026-07-10';                     // 26년 7월 10일(금)
 const FIRST = '2026-05-30';                     // D+42
 const EN = {'열':'Fever','두통':'Headache','메스꺼움':'Nausea','구토(음식을 토함)':'Vomiting','변비':'Constipation',
   '입안이 헐어서 아프거나 목이 따가운 증상(구내염)':'Mucositis oral','피로, 피곤함 또는 기운 없음':'Fatigue',
-  '피부 발진(붉은 두드러기나 염증)':'Rash maculo-papular','코피':'Nosebleed','피부건조':'Skin dryness'};
+  '피부 발진(붉은 두드러기나 염증)':'Rash maculo-papular','코피':'Nosebleed','피부건조':'Skin dryness',
+  '복통':'Abdominal pain','근육통':'Muscle pain','관절통':'Joint pain','통증':'General pain'};
 const GCOLOR = {0:'var(--g0)',1:'var(--g1)',2:'var(--g2)',3:'var(--g3)',4:'var(--g4)'};
 const FACE = {0:['😊','f0','증상 없어요'],1:['🙂','f1','조금 불편해요'],2:['😕','f2','꽤 불편해요'],3:['😖','f3','많이 힘들어요'],4:['😣','f4','너무 힘들어요']};
 const BADGE = {0:['#e3f0fd','#4a90d9','#2a6db5'],1:['#e8f6ec','#4caf50','#2e7d32'],2:['#fff8d6','#E8B93E','#8a6a00'],3:['#fdeee2','#ef8332','#c9611a'],4:['#fdecea','#DD5244','#b03a2e']};
@@ -624,9 +625,9 @@ function weekReport(){
   if(!changed.length&&!top.length&&!peak.length) return null;
   return {changed,top,peak,gmax,A,B,GA,GB};
 }
-// 진료노트 집계 (최근 7일 G2+)
+// 진료노트 집계 (최근 7일 G2+, 통증 계열 제외)
 function noteSummary(){
-  const tw=records().filter(r=>r.g>=2&&dayDiff(r.d,TODAY)<=6&&dayDiff(r.d,TODAY)>=0);
+  const tw=records().filter(r=>r.g>=2&&!PAIN_SYMS.includes(r.sym)&&dayDiff(r.d,TODAY)<=6&&dayDiff(r.d,TODAY)>=0);
   const m={};
   tw.forEach(r=>{(m[r.sym]=m[r.sym]||[]).push(r);});
   return Object.keys(m).map(s=>{
@@ -1039,7 +1040,7 @@ function s2Go(){
     return {sym:s,qs};
   });
   SV.flat=[];SV.queue.forEach((e,si)=>e.qs.forEach((q,qi)=>SV.flat.push({sym:e.sym,si,qi,q})));
-  SV.pos=0;SV.answers={};SV.score=0;SV.parts={};SV.back=false;
+  SV.pos=0;SV.answers={};SV.score=0;SV.parts={};SV.back=false;SV.picked=null;SV.lock=false;
   go(scrS4);
 }
 function togglePart(k){ if(SV.parts[k])delete SV.parts[k]; else SV.parts[k]=1; render(); }
@@ -1050,8 +1051,9 @@ function scrS4(){
   const prog=Math.round((SV.pos+1)/total*100);
   const isScore=f.q.type==='score';
   const isPart=f.q.type==='part';
-  const desc=f.qi===0&&PRO.desc[f.sym]?`<div class="saf" style="position:relative;padding-right:70px;margin-top:4px;line-height:1.7;">${esc(PRO.desc[f.sym])}
-    <img src="${asset('byeori')}" alt="벼리" style="width:66px;position:absolute;right:6px;bottom:-8px;"></div>`:'';
+  const desc=f.qi===0&&PRO.desc[f.sym]?`<div class="saf" style="display:flex;gap:10px;align-items:center;margin-top:10px;line-height:1.7;">
+    <span style="flex:1;">${esc(PRO.desc[f.sym])}</span>
+    <img src="${asset('byeori')}" alt="벼리" style="width:46px;flex:none;align-self:flex-end;"></div>`:'';
   let body;
   if(isPart){
     const view=SV.back?'뒤':'앞';
@@ -1098,7 +1100,7 @@ function scrS4(){
     </div>`;
   }else{
     body=`<div class="card" style="padding:13px;display:flex;flex-direction:column;gap:9px;">
-      ${f.q.a.map((a,i)=>`<div class="svans" style="border-color:#eceadf;box-shadow:none;" onclick="s4Answer(${i})"><span class="tx">${esc(a)}</span><span class="rd"></span></div>`).join('')}
+      ${f.q.a.map((a,i)=>`<div class="svans" style="border-color:#eceadf;box-shadow:none;${SV.picked===i?'border-color:var(--teal);background:#f0f9f9;':''}" onclick="s4Answer(${i})"><span class="tx">${esc(a)}</span><span class="rd ${SV.picked===i?'on':''}"></span></div>`).join('')}
     </div>`;
   }
   const q=f.q.q;
@@ -1124,7 +1126,16 @@ function s4Answer(i){
     const n=SV.score||0;
     SV.answers[SV.pos]=n<=3?0:n<=6?1:2;
     SV.score=0;
-  }else SV.answers[SV.pos]=i;
+  }else{
+    if(SV.lock)return;
+    SV.answers[SV.pos]=i;
+    SV.lock=true;SV.picked=i;render();
+    setTimeout(()=>{SV.lock=false;SV.picked=null;s4Next();},450);
+    return;
+  }
+  s4Next();
+}
+function s4Next(){
   if(SV.pos<SV.flat.length-1){SV.pos++;render();}
   else{
     saveSurveyRecords(false);
@@ -1526,7 +1537,7 @@ function calTap(ds){
 /* ================= 뷰어 ================= */
 const viewer=document.getElementById('viewer');
 let vTimer=null;
-function closeViewer(){ viewer.classList.remove('show'); viewer.innerHTML=''; if(vTimer){clearInterval(vTimer);vTimer=null;} }
+function closeViewer(){ viewer.classList.remove('show'); viewer.classList.remove('blog'); viewer.innerHTML=''; if(vTimer){clearInterval(vTimer);vTimer=null;} }
 function openViewer(type,title,sym){
   if(type==='동영상')openVideo(title);
   else if(type==='블로그')openBlog(title,sym);
